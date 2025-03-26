@@ -43,7 +43,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
 @Composable
 fun ToDoApp() {
     val context = LocalContext.current
@@ -56,7 +55,7 @@ fun ToDoApp() {
     }
 
     // Solicitar permisos en el inicio
-    LaunchedEffect(Unit) {
+    LaunchedEffect (Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
         } else {
@@ -70,30 +69,30 @@ fun ToDoApp() {
     var selectedImageUri by remember { mutableStateOf<String?>(null) }
     var editedImageUri by remember { mutableStateOf<String?>(null) }
     var showDialog by remember { mutableStateOf(false) }
-    var editedTask by remember { mutableStateOf<Task>(Task("", "")) }
+    var editedTask by remember { mutableStateOf<Task>(Task("","")) }
     var currentTitle by remember { mutableStateOf("") }
 
     // Creamos los launcher para añadir imagenes
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            selectedImageUri = uri.toString()
-        } else {
-            selectedImageUri = null
-        }
+    ) {
+            uri -> if(uri!= null){
+        selectedImageUri = uri.toString()
+    } else {
+        selectedImageUri = null
+    }
     }
     val editedImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            editedImageUri = uri.toString()
-        } else {
-            editedImageUri = null
-        }
+    ) {
+            uri -> if(uri!= null){
+        editedImageUri = uri.toString()
+    } else {
+        editedImageUri = null
+    }
     }
     //Llamamos al ToDoScreen con los params necesarios
-    ToDoScreen(
+    ToDoScreen (
         selectedImageUri = selectedImageUri,
         currentToDo = currentToDo,
         toDoList = toDoList,
@@ -101,29 +100,119 @@ fun ToDoApp() {
         onValueChange = { currentToDo = it },
         //Funcion para añadir, si está vacío el titulo lanza un Toast
         onAddToDo = {
-            if (currentToDo.isNotEmpty()) {
+            if(currentToDo.isNotEmpty()) {
                 toDoList.add(Task(currentToDo, selectedImageUri))
                 currentToDo = ""
                 selectedImageUri = null
-            } else {
-                Toast.makeText(
-                    context,
-                    "You cannot add a task with an empty title",
-                    Toast.LENGTH_SHORT
-                ).show()
+            }else {
+                Toast.makeText(context, "You cannot add a task with an empty title", Toast.LENGTH_SHORT).show()
             }
         },
-        onRemoveToDo = { task -> toDoList.remove(task) },
+        onRemoveToDo = {task -> toDoList.remove(task)},
         //Cambiamos showDialog para poder ver el OpenDialog
-        onOpenDialog = { task ->
+        onOpenDialog = {
+                task ->
             editedTask = task
             currentTitle = task.title
             editedImageUri = task.imageUri
             showDialog = true
         },
     )
+
+    if(showDialog){
+        //Llamamos a OpenDialog con los params necesarios
+        OpenDialog(
+            currentTitle = currentTitle,
+            onTitleChange = { currentTitle = it},
+            editedImageUri = editedImageUri,
+            editedImagePickerLauncher = editedImagePickerLauncher,
+            //Si apacha cancel se cierra el OpenDialog
+            onCloseDialog = {showDialog = false},
+            // Si apacha save se edita el task, si el titulo es vacío lanza un toast
+            onEditToDo = {
+                if(currentTitle.isNotEmpty()) {
+                    val index = toDoList.indexOf(editedTask)
+                    if(editedImageUri != null && editedImageUri.toString().isNotBlank()){
+                        toDoList[index] = Task(currentTitle, editedImageUri)
+                    } else {
+                        toDoList[index] = Task(currentTitle, editedTask.imageUri)
+                    }
+                    showDialog = false
+                    editedImageUri = null
+                } else {
+                    Toast.makeText(context, "You cannot edit a task with an empty title", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
 }
 
+@Composable
+fun OpenDialog(
+    currentTitle: String,
+    onTitleChange: (String) -> Unit,
+    editedImageUri: String?,
+    editedImagePickerLauncher: ActivityResultLauncher<String>?,
+    onCloseDialog: () -> Unit,
+    onEditToDo: () -> Unit
+) {
+    Dialog(onDismissRequest = {}) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(30.dp, 20.dp)){
+                Text(
+                    text = "Edit Task",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+                OutlinedTextField(
+                    value = currentTitle,
+                    onValueChange = {onTitleChange(it)},
+                    label = { Text("Task") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.CenterHorizontally)
+                        .padding(0.dp,16.dp)
+                )
+                Row {
+                    Button(onClick = { editedImagePickerLauncher?.launch("image/*")},
+                        modifier = Modifier.padding(0.dp,16.dp)) {
+                        Text("Select Image")
+                    }
+                    editedImageUri?.let { uri ->
+                        AsyncImage(
+                            model = uri,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(50.dp)
+                                .align(Alignment.CenterVertically)
+
+                        )
+                    }
+                }
+
+
+                Row (
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth()
+                ){
+                    TextButton(onClick = {onCloseDialog()}) {
+                        Text("Cancel")
+                    }
+
+                    TextButton(onClick = {onEditToDo()}) {
+                        Text("Save")
+                    }
+                }
+            }
+
+        }
+    }
+}
 
 @Composable
 fun ToDoScreen(
@@ -186,12 +275,51 @@ fun ToDoScreen(
     }
 }
 
+@Composable
+fun TodoItem (toDo: Task, onRemoveToDo: (Task) -> Unit, onOpenDialog: (Task) -> Unit){
+    Card (
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Row (
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.align(Alignment.CenterVertically)
+            ){
+                toDo.imageUri?.let { uri ->
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                    )
+                }
+                Text(text = toDo.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.align(Alignment.CenterVertically))
+            }
+
+            Row (modifier = Modifier.align(Alignment.CenterVertically)){
+                IconButton(onClick = {onOpenDialog(toDo)}) { Icon(imageVector = Icons.Filled.Edit, contentDescription = "") }
+                IconButton(onClick = {onRemoveToDo(toDo)}) { Icon(imageVector = Icons.Filled.Delete, contentDescription = "" ) }
+            }
+
+        }
+    }
+}
 
 @Preview(showBackground = true)
 @Composable
 fun ToDoPreview() {
     ExtendedToDoTheme {
-
+        ToDoScreen(
+            selectedImageUri = null,
+            currentToDo = "",
+            toDoList = listOf(),
+            imagePickerLauncher = null,
+            onValueChange = {},
+            onAddToDo = {},
+            onRemoveToDo = {},
+            onOpenDialog = {}
+        )
     }
 }
 
