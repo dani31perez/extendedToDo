@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
 @Composable
 fun ToDoApp() {
     val context = LocalContext.current
@@ -55,7 +56,7 @@ fun ToDoApp() {
     }
 
     // Solicitar permisos en el inicio
-    LaunchedEffect (Unit) {
+    LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
         } else {
@@ -63,7 +64,128 @@ fun ToDoApp() {
         }
     }
 
+    //Estaods necesarios para editar y añadir tasks
+    var currentToDo by remember { mutableStateOf("") }
+    val toDoList = remember { mutableStateListOf<Task>() }
+    var selectedImageUri by remember { mutableStateOf<String?>(null) }
+    var editedImageUri by remember { mutableStateOf<String?>(null) }
+    var showDialog by remember { mutableStateOf(false) }
+    var editedTask by remember { mutableStateOf<Task>(Task("", "")) }
+    var currentTitle by remember { mutableStateOf("") }
+
+    // Creamos los launcher para añadir imagenes
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            selectedImageUri = uri.toString()
+        } else {
+            selectedImageUri = null
+        }
+    }
+    val editedImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            editedImageUri = uri.toString()
+        } else {
+            editedImageUri = null
+        }
+    }
+    //Llamamos al ToDoScreen con los params necesarios
+    ToDoScreen(
+        selectedImageUri = selectedImageUri,
+        currentToDo = currentToDo,
+        toDoList = toDoList,
+        imagePickerLauncher = imagePickerLauncher,
+        onValueChange = { currentToDo = it },
+        //Funcion para añadir, si está vacío el titulo lanza un Toast
+        onAddToDo = {
+            if (currentToDo.isNotEmpty()) {
+                toDoList.add(Task(currentToDo, selectedImageUri))
+                currentToDo = ""
+                selectedImageUri = null
+            } else {
+                Toast.makeText(
+                    context,
+                    "You cannot add a task with an empty title",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        },
+        onRemoveToDo = { task -> toDoList.remove(task) },
+        //Cambiamos showDialog para poder ver el OpenDialog
+        onOpenDialog = { task ->
+            editedTask = task
+            currentTitle = task.title
+            editedImageUri = task.imageUri
+            showDialog = true
+        },
+    )
 }
+
+
+@Composable
+fun ToDoScreen(
+    selectedImageUri: String?,
+    currentToDo: String,
+    toDoList: List<Task>,
+    imagePickerLauncher: ActivityResultLauncher<String>?,
+    onValueChange: (String) -> Unit,
+    onAddToDo: () -> Unit,
+    onRemoveToDo: (Task) -> Unit,
+    onOpenDialog: (Task) -> Unit
+)
+{
+
+    Column (
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Todo List",
+            style = MaterialTheme.typography.headlineMedium,
+        )
+        OutlinedTextField(
+            value = currentToDo,
+            onValueChange = {onValueChange(it)},
+            label = { Text("New item") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ){
+            Row {
+                Button(onClick = { imagePickerLauncher?.launch("image/*")}){
+                    Text("Pick Image")
+                }
+                selectedImageUri?.let { uri ->
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = null,
+                        modifier = Modifier.size(50.dp),
+                    )
+                }
+            }
+
+            Button(onClick = {onAddToDo()}){
+                Text("AddTask")
+            }
+        }
+        LazyColumn {
+            items(toDoList) { toDo ->
+                TodoItem(toDo = toDo, onRemoveToDo = onRemoveToDo, onOpenDialog = onOpenDialog)
+            }
+        }
+    }
+}
+
 
 @Preview(showBackground = true)
 @Composable
@@ -72,3 +194,5 @@ fun ToDoPreview() {
 
     }
 }
+
+data class Task(val title: String, val imageUri: String?)
